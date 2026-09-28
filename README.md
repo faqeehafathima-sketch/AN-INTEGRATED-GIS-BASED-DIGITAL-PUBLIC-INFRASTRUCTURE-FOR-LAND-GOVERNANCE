@@ -331,39 +331,6 @@ Demonstration datasets may be synthetic and should not be interpreted as officia
 
 ---
 
-## 📁 Suggested Repository Structure
-
-```text
-LAND-INTELLIGENCE/
-├── README.md
-├── LICENSE
-├── .gitignore
-├── requirements.txt
-├── frontend/
-│   ├── index.html
-│   ├── css/
-│   ├── js/
-│   └── assets/
-├── backend/
-│   ├── main.py
-│   ├── routes/
-│   ├── models/
-│   └── services/
-├── ml/
-│   ├── preprocessing/
-│   ├── anomaly_detection/
-│   └── models/
-├── data/
-│   └── sample/
-├── docs/
-│   ├── presentation/
-│   ├── flowcharts/
-│   └── references/
-└── screenshots/
-```
-
----
-
 ## 📚 References
 
 - Department of Land Resources, Government of India — Digital India Land Records Modernization Programme (DILRMP)
