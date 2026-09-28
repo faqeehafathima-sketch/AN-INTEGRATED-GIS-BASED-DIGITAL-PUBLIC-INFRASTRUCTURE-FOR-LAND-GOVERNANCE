@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAND INTELLIGENCE - House & Property Record Compliance Inspector</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: { 800: '#1e293b', 900: '#0f172a' },
+                        brand: { 500: '#0284c7', 600: '#0284c7', 700: '#0369a1' }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Leaflet GIS CSS & JS CDN -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        #map { height: 100%; min-height: 520px; border-radius: 0.75rem; z-index: 1; background: #1e293b; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        .leaflet-popup-content-wrapper { background: #0f172a; color: #f8fafc; border: 1px solid #334155; border-radius: 8px; }
+        .leaflet-popup-tip { background: #0f172a; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
+
+    <header class="bg-slate-900/95 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50 px-6 py-3 flex flex-wrap justify-between items-center gap-4">
+        <div class="flex items-center space-x-3">
+            <div class="bg-sky-600 text-white p-2.5 rounded-xl flex items-center justify-center shadow-lg shadow-sky-600/30">
+                <i class="fa-solid fa-house-chimney-window text-xl"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="font-extrabold text-lg text-white tracking-tight">LAND INTELLIGENCE</h1>
+                    <span class="bg-sky-500/10 text-sky-400 text-xs px-2.5 py-0.5 rounded-full border border-sky-500/20 font-semibold">PROPERTY & HOUSE RECORD COMPLIANCE CHECKER</span>
+                </div>
+                <p class="text-xs text-slate-400">Multi-State Citizen & Officer House-by-House Property Verification Portal</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-3">
+            <span class="text-xs bg-slate-800 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700">
+                <i class="fa-solid fa-microchip text-sky-400 mr-1.5"></i> PS ID: <strong class="text-white">SIH26015</strong>
+            </span>
+            <button onclick="toggleCitizenModal()" class="bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-all flex items-center gap-2 shadow-lg shadow-sky-600/20">
+                <i class="fa-solid fa-house-medical"></i> Report House Discrepancy
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-grow p-6 grid grid-cols-12 gap-6 max-w-[1700px] mx-auto w-full">
+
+        <div class="col-span-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                <div>
+                    <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Street Houses Listed</p>
+                    <h3 class="text-2xl font-black text-white mt-0.5" id="stat-total">32 Houses</h3>
+                    <p class="text-[11px] text-slate-400 mt-1" id="stat-street-subtext"><i class="fa-solid fa-globe text-sky-400 mr-1"></i> Across All Filtered Locations</p>
+                </div>
+                <div class="bg-slate-700/50 p-3 rounded-xl text-sky-400 border border-slate-600/50">
+                    <i class="fa-solid fa-city text-2xl"></i>
+                </div>
+            </div>
+
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                <div>
+                    <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Discrepancies Flagged</p>
+                    <h3 class="text-2xl font-black text-rose-400 mt-0.5" id="stat-high-priority">8 Houses</h3>
+                    <p class="text-[11px] text-rose-300/80 mt-1"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Street Line / Area Mismatch</p>
+                </div>
+                <div class="bg-rose-500/10 p-3 rounded-xl text-rose-400 border border-rose-500/20">
+                    <i class="fa-solid fa-house-circle-exclamation text-2xl"></i>
+                </div>
+            </div>
+
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                <div>
+                    <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Minor Area Deviations</p>
+                    <h3 class="text-2xl font-black text-amber-400 mt-0.5" id="stat-anomalies">8 Houses</h3>
+                    <p class="text-[11px] text-amber-300/80 mt-1"><i class="fa-solid fa-ruler-combined mr-1"></i> Deed vs Map Difference</p>
+                </div>
+                <div class="bg-amber-500/10 p-3 rounded-xl text-amber-400 border border-amber-500/20">
+                    <i class="fa-solid fa-arrows-left-right text-2xl"></i>
+                </div>
+            </div>
+
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                <div>
+                    <p class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Fully Matched & Verified</p>
+                    <h3 class="text-2xl font-black text-emerald-400 mt-0.5" id="stat-verified">16 Houses</h3>
+                    <p class="text-[11px] text-emerald-300/80 mt-1"><i class="fa-solid fa-circle-check mr-1"></i> Clean Record Approved</p>
+                </div>
+                <div class="bg-emerald-500/10 p-3 rounded-xl text-emerald-400 border border-emerald-500/20">
+                    <i class="fa-solid fa-house-circle-check text-2xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-span-12 lg:col-span-7 bg-slate-800/80 border border-slate-700/60 rounded-xl p-4 flex flex-col h-[660px]">
+            
+            <div class="space-y-2 mb-3 bg-slate-900/80 p-3 rounded-xl border border-slate-700/80">
+                <div class="flex justify-between items-center">
+                    <h2 class="font-bold text-xs text-white flex items-center gap-1.5 uppercase tracking-wider">
+                        <i class="fa-solid fa-filter text-sky-400"></i> Location & House Search
+                    </h2>
+                    <span id="location-active-tag" class="text-[10px] bg-sky-500/10 text-sky-400 px-2 py-0.5 rounded border border-sky-500/20">
+                        32 Houses Visible
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                        <label class="block text-[10px] text-slate-400 font-semibold mb-1">State</label>
+                        <select id="state-filter" onchange="applyFilters()" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500">
+                            <option value="ALL">All States</option>
+                            <option value="Chhattisgarh">Chhattisgarh</option>
+                            <option value="Tamil Nadu">Tamil Nadu</option>
+                            <option value="Maharashtra">Maharashtra</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] text-slate-400 font-semibold mb-1">Area / District</label>
+                        <select id="area-filter" onchange="applyFilters()" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500">
+                            <option value="ALL">All Areas</option>
+                            <option value="Raipur (Central)">Raipur (Central)</option>
+                            <option value="Kanchipuram (South)">Kanchipuram (South)</option>
+                            <option value="Pune (West)">Pune (West)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] text-slate-400 font-semibold mb-1">Street Corridor</label>
+                        <select id="street-filter" onchange="applyFilters()" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500">
+                            <option value="ALL">All Streets</option>
+                            <option value="Gandhi Street">Gandhi Street</option>
+                            <option value="Nehru Road">Nehru Road</option>
+                            <option value="Subhash Bose Avenue">Subhash Bose Avenue</option>
+                            <option value="Tagore Marg">Tagore Marg</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="relative w-full pt-1">
+                    <input type="text" id="house-search-input" oninput="applyFilters()" placeholder="Search owner name, House No (e.g., House #102, 201), or Property ID..." 
+                           class="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-8 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-sky-500 transition">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-3.5 text-slate-400 text-xs"></i>
+                    <button onclick="clearSearch()" id="clear-search-btn" class="hidden absolute right-3 top-3.5 text-slate-400 hover:text-white text-xs">
+                        <i class="fa-solid fa-circle-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-grow w-full relative">
+                <div id="map"></div>
+                
+                <div class="absolute bottom-3 left-3 z-[1000] bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-700 text-[11px] text-slate-300 flex items-center gap-2 shadow-lg">
+                    <i class="fa-solid fa-layer-group text-sky-400"></i>
+                    <span>Map Layers: <strong>Satellite View</strong> | <strong>Street View (Esri)</strong> | <strong>Topo Map View</strong></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-span-12 lg:col-span-5 bg-slate-800/80 border border-slate-700/60 rounded-xl p-4 flex flex-col h-[660px]">
+            <div class="flex justify-between items-center border-b border-slate-700/60 pb-3 mb-3">
+                <div>
+                    <h2 class="font-bold text-sm text-white flex items-center gap-2">
+                        <i class="fa-solid fa-house-chimney-crack text-amber-400"></i>
+                        House Property Accuracy Inspector
+                    </h2>
+                    <p class="text-[11px] text-slate-400">Comparison of registered deed vs. map measurement</p>
+                </div>
+                <span id="active-house-badge" class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-md font-mono">House #102 Selected</span>
+            </div>
+
+            <div id="house-risk-card" class="flex-grow overflow-y-auto custom-scrollbar pr-1 space-y-3">
+                
+                <div class="bg-slate-900 border border-slate-700 rounded-xl p-4 space-y-3">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400">Property Owner & Door No.</span>
+                            <h3 class="font-black text-xl text-sky-400" id="house-owner-name">Priya Patel</h3>
+                            <p class="text-xs text-white font-semibold mt-0.5" id="house-door-no"><i class="fa-solid fa-location-dot text-rose-400 mr-1"></i> House #102, Gandhi Street</p>
+                            <p class="text-xs text-slate-400" id="house-property-id">Location: <strong class="text-white" id="house-loc-tag">Raipur (Central), Chhattisgarh</strong></p>
+                        </div>
+                        <div id="house-risk-badge-box" class="text-right">
+                            <span class="px-3 py-1 rounded-full text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/30 inline-block">DISCREPANCY FLAGGED</span>
+                            <p class="text-[10px] text-slate-400 mt-1" id="house-score-label">Mismatch Level: <strong class="text-rose-400">89% Alert</strong></p>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-800/80 border border-slate-700/80 p-3 rounded-lg space-y-2">
+                        <div class="flex justify-between text-xs font-semibold">
+                            <span class="text-slate-300"><i class="fa-solid fa-file-invoice text-sky-400 mr-1"></i> Registered Deed Plot Area:</span>
+                            <span class="text-white font-mono" id="house-deed-area">1,500 Sq Ft</span>
+                        </div>
+                        <div class="flex justify-between text-xs font-semibold">
+                            <span class="text-slate-300"><i class="fa-solid fa-vector-square text-emerald-400 mr-1"></i> Satellite Measured Footprint:</span>
+                            <span class="text-white font-mono" id="house-gis-area">2,100 Sq Ft</span>
+                        </div>
+                        <div class="pt-1 border-t border-slate-700 flex justify-between items-center text-xs">
+                            <span class="text-slate-400">Physical Footprint Difference:</span>
+                            <span class="font-extrabold text-rose-400 font-mono" id="house-diff-area">+600 Sq Ft (+40.0%)</span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2 text-xs">
+                        <span class="font-bold text-slate-300 block"><i class="fa-solid fa-circle-nodes text-sky-400 mr-1"></i> House Boundary & Record Status:</span>
+                        
+                        <div class="grid grid-cols-2 gap-2 text-[11px]">
+                            <div class="bg-slate-800 p-2 rounded border border-slate-700/50">
+                                <span class="text-slate-400 block">Street Line Setback</span>
+                                <strong class="text-rose-400" id="house-street-encroach">Extends +3.5 ft onto street</strong>
+                            </div>
+                            <div class="bg-slate-800 p-2 rounded border border-slate-700/50">
+                                <span class="text-slate-400 block">Property Tax Record</span>
+                                <strong class="text-amber-300" id="house-tax-status">Unrecorded Addition</strong>
+                            </div>
+                            <div class="bg-slate-800 p-2 rounded border border-slate-700/50">
+                                <span class="text-slate-400 block">Sanctioned Floor Plan</span>
+                                <strong class="text-amber-400" id="house-sanction">G+2 Built (Deed G+1)</strong>
+                            </div>
+                            <div class="bg-slate-800 p-2 rounded border border-slate-700/50">
+                                <span class="text-slate-400 block">Discrepancy Ticket Status</span>
+                                <strong class="text-rose-400" id="house-dispute">Flagged for Verification</strong>
+                            </div>
+                        </div>
+
+                        <div class="bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-lg text-rose-200 text-[11px] mt-2">
+                            <strong><i class="fa-solid fa-circle-info text-rose-400 mr-1"></i> Record Discrepancy Summary:</strong>
+                            <p id="house-ml-signal" class="mt-1 text-slate-300 leading-relaxed">
+                                Satellite map measures 2,100 sq ft vs registered deed of 1,500 sq ft. Building structure extends 3.5 ft past municipal setback line onto Gandhi Street.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="pt-2 flex gap-2">
+                        <button onclick="updateHouseStatus('Clean Record Verified')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg transition text-xs shadow-md">
+                            <i class="fa-solid fa-check mr-1"></i> Mark Record Verified
+                        </button>
+                        <button onclick="updateHouseStatus('Field Verification Requested')" class="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded-lg transition text-xs shadow-md">
+                            <i class="fa-solid fa-person-walking-luggage mr-1"></i> Request Field Survey
+                        </button>
+                    </div>
+                </div>
+
+                <div class="space-y-2 pt-2">
+                    <span class="text-xs font-bold text-slate-300 flex justify-between items-center">
+                        <span><i class="fa-solid fa-city text-sky-400 mr-1"></i> Matching Houses Queue:</span>
+                        <span id="houses-count-label" class="text-[10px] text-slate-400 font-normal">Showing 32 Houses</span>
+                    </span>
+                    <div id="all-houses-list" class="space-y-1.5 max-h-[180px] overflow-y-auto custom-scrollbar pr-1">
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <div id="citizen-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[2000] hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+            <button onclick="toggleCitizenModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="bg-sky-500/20 text-sky-400 p-2.5 rounded-xl border border-sky-500/30">
+                    <i class="fa-solid fa-house-chimney text-xl"></i>
+                </div>
+                <div>
+                    <h3 class="font-extrabold text-lg text-white">Homeowner Discrepancy Reporting Portal</h3>
+                    <p class="text-xs text-slate-400">Report house boundary, setback, or area difference for your property</p>
+                </div>
+            </div>
+
+            <form id="citizen-form" onsubmit="handleCitizenSubmit(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-slate-300 font-medium mb-1">House Owner Name</label>
+                    <input type="text" id="cit-owner" required placeholder="e.g. Priya Patel or Ramesh Kumar" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-sky-500">
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-medium mb-1">Door Number / Street Name</label>
+                    <input type="text" id="cit-house-no" required placeholder="e.g. House #102, Gandhi Street" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-sky-500">
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-medium mb-1">Discrepancy Category</label>
+                    <select id="cit-category" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-sky-500">
+                        <option>Deed Area vs Physical House Footprint Mismatch</option>
+                        <option>Neighbor Boundary Overlap / Wall Dispute</option>
+                        <option>Street Line / Setback Flag Correction</option>
+                        <option>Property Tax Area Correction Request</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-medium mb-1">Discrepancy Description</label>
+                    <textarea id="cit-desc" rows="3" required placeholder="Describe the physical house boundary or deed difference observed..." class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-sky-500"></textarea>
+                </div>
+                <button type="submit" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 rounded-lg transition text-xs shadow-lg shadow-sky-600/20">
+                    <i class="fa-solid fa-paper-plane mr-1.5"></i> Submit House Ticket
+                </button>
+            </form>
+            <div id="cit-success" class="hidden mt-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 p-3 rounded-lg text-xs text-center">
+                <i class="fa-solid fa-circle-check text-lg mb-1 block text-emerald-400"></i>
+                Discrepancy Registered! Ticket ID: <strong id="cit-case-id" class="text-white">CASE-2026-8941</strong>. Forwarded for field verification.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const streetHouses = [
+            // ================= GANDHI STREET - CHHATTISGARH (HOUSES 101-108) =================
+            {
+                id: "H101", doorNo: "House #101", street: "Gandhi Street", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Rajesh Sharma", propertyId: "PROP-CG-2026-101", deedArea: 1200, gisArea: 1210, anomalyScore: 0.08,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "Clear Setback", taxStatus: "Up to Date",
+                sanction: "G+1 Approved", dispute: "None", signal: "Physical building footprint matches registered deed area within 1%. Complies with street setback rules.",
+                coordinates: [[21.2510, 81.6300], [21.2514, 81.6300], [21.2514, 81.6308], [21.2510, 81.6308]]
+            },
+            {
+                id: "H102", doorNo: "House #102", street: "Gandhi Street", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Priya Patel", propertyId: "PROP-CG-2026-102", deedArea: 1500, gisArea: 2100, anomalyScore: 0.89,
+                status: "Field Survey Requested", priority: "Discrepancy Flagged", streetEncroach: "Extends +3.5 ft onto street", taxStatus: "Unrecorded Addition",
+                sanction: "G+2 Built (Deed G+1)", dispute: "Under Review", signal: "Satellite footprint measures 2,100 sq ft vs registered deed of 1,500 sq ft (+40%). Building extends 3.5 ft past street setback line onto Gandhi Street.",
+                coordinates: [[21.2514, 81.6300], [21.2519, 81.6300], [21.2519, 81.6309], [21.2514, 81.6309]]
+            },
+            {
+                id: "H103", doorNo: "House #103", street: "Gandhi Street", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Amit Kumar", propertyId: "PROP-CG-2026-103", deedArea: 1000, gisArea: 1005, anomalyScore: 0.05,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "None", taxStatus: "Up to Date",
+                sanction: "G+1 Approved", dispute: "None", signal: "Building footprint completely aligned with official municipal survey map.",
+                coordinates: [[21.2519, 81.6300], [21.2523, 81.6300], [21.2523, 81.6308], [21.2519, 81.6308]]
+            },
+            {
+                id: "H104", doorNo: "House #104", street: "Gandhi Street", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Sunita Verma", propertyId: "PROP-CG-2026-104", deedArea: 1800, gisArea: 2450, anomalyScore: 0.94,
+                status: "Field Survey Requested", priority: "Discrepancy Flagged", streetEncroach: "Extends +4.2 ft onto street", taxStatus: "Unrecorded Construction",
+                sanction: "G+3 Built (Deed G+2)", dispute: "Notice Issued", signal: "Major footprint mismatch (+36% area). Unsanctioned rear extension into public drain area + street line boundary violation.",
+                coordinates: [[21.2523, 81.6300], [21.2528, 81.6300], [21.2528, 81.6310], [21.2523, 81.6310]]
+            },
+            {
+                id: "H105", doorNo: "House #105", street: "Gandhi Street", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Vikram Singh", propertyId: "PROP-CG-2026-105", deedArea: 1250, gisArea: 1480, anomalyScore: 0.62,
+                status: "Pending Check", priority: "Minor Mismatch", streetEncroach: "Minor Porch Boundary Shift", taxStatus: "Under Review",
+                sanction: "G+1 Approved", dispute: "None", signal: "Deed area 1,250 sq ft vs physical plot 1,480 sq ft. Front porch extends slightly over adjacent lot line.",
+                coordinates: [[21.2528, 81.6300], [21.2533, 81.6300], [21.2533, 81.6309], [21.2528, 81.6309]]
+            },
+            {
+                id: "H106", doorNo: "House #106", street: "Gandhi Street", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Ananya Rao", propertyId: "PROP-CG-2026-106", deedArea: 2000, gisArea: 2015, anomalyScore: 0.09,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "None", taxStatus: "Up to Date",
+                sanction: "G+2 Approved", dispute: "None", signal: "Standard verified residential property with clear street setback.",
+                coordinates: [[21.2533, 81.6300], [21.2538, 81.6300], [21.2538, 81.6309], [21.2533, 81.6309]]
+            },
+            {
+                id: "H107", doorNo: "House #107", street: "Gandhi Street", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Mohammed Ali", propertyId: "PROP-CG-2026-107", deedArea: 1600, gisArea: 1610, anomalyScore: 0.06,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "None", taxStatus: "Up to Date",
+                sanction: "G+1 Approved", dispute: "None", signal: "Fully aligned deed and satellite map boundaries.",
+                coordinates: [[21.2538, 81.6300], [21.2543, 81.6300], [21.2543, 81.6309], [21.2538, 81.6309]]
+            },
+            {
+                id: "H108", doorNo: "House #108", street: "Gandhi Street", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Suresh Gupta", propertyId: "PROP-CG-2026-108", deedArea: 1100, gisArea: 1350, anomalyScore: 0.58,
+                status: "Pending Check", priority: "Minor Mismatch", streetEncroach: "Roof Awning Overhang", taxStatus: "Partial Tax Paid",
+                sanction: "G+1 Approved", dispute: "None", signal: "Excess measured footprint (+22.7%) due to extended roof structure over side walkway.",
+                coordinates: [[21.2543, 81.6300], [21.2548, 81.6300], [21.2548, 81.6309], [21.2543, 81.6309]]
+            },
+
+            // ================= NEHRU ROAD - TAMIL NADU (HOUSES 201-208) =================
+            {
+                id: "H201", doorNo: "House #201", street: "Nehru Road", area: "Kanchipuram (South)", state: "Tamil Nadu",
+                owner: "Deepak Deshmukh", propertyId: "PROP-TN-2026-201", deedArea: 1400, gisArea: 1408, anomalyScore: 0.07,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "Clear Setback", taxStatus: "Up to Date",
+                sanction: "G+2 Approved", dispute: "None", signal: "Verified house footprint on Nehru Road with accurate setback.",
+                coordinates: [[12.8310, 79.7000], [12.8314, 79.7000], [12.8314, 79.7008], [12.8310, 79.7008]]
+            },
+            {
+                id: "H202", doorNo: "House #202", street: "Nehru Road", area: "Kanchipuram (South)", state: "Tamil Nadu",
+                owner: "Kavita Reddy", propertyId: "PROP-TN-2026-202", deedArea: 1300, gisArea: 1850, anomalyScore: 0.88,
+                status: "Field Survey Requested", priority: "Discrepancy Flagged", streetEncroach: "Extends +5.0 ft onto footpath", taxStatus: "Unrecorded Extension",
+                sanction: "G+2 Built (Deed G+1)", dispute: "Neighbor Objection", signal: "Deed records 1,300 sq ft; satellite footprint shows 1,850 sq ft (+42.3%). Front gate and wall project onto public footpath.",
+                coordinates: [[12.8314, 79.7000], [12.8319, 79.7000], [12.8319, 79.7009], [12.8314, 79.7009]]
+            },
+            {
+                id: "H203", doorNo: "House #203", street: "Nehru Road", area: "Kanchipuram (South)", state: "Tamil Nadu",
+                owner: "Sanjay Joshi", propertyId: "PROP-TN-2026-203", deedArea: 1550, gisArea: 1560, anomalyScore: 0.05,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "None", taxStatus: "Up to Date",
+                sanction: "G+1 Approved", dispute: "None", signal: "Matches official layout boundaries on Nehru Road corridor.",
+                coordinates: [[12.8319, 79.7000], [12.8323, 79.7000], [12.8323, 79.7008], [12.8319, 79.7008]]
+            },
+            {
+                id: "H204", doorNo: "House #204", street: "Nehru Road", area: "Kanchipuram (South)", state: "Tamil Nadu",
+                owner: "Meena Mukherji", propertyId: "PROP-TN-2026-204", deedArea: 1150, gisArea: 1520, anomalyScore: 0.78,
+                status: "Pending Check", priority: "Discrepancy Flagged", streetEncroach: "Side Wall Boundary Overlap", taxStatus: "Under Review",
+                sanction: "G+1 Approved", dispute: "Boundary Dispute", signal: "Footprint difference of +32% detected. Boundary wall encroaches into House #205 boundary.",
+                coordinates: [[12.8323, 79.7000], [12.8328, 79.7000], [12.8328, 79.7009], [12.8323, 79.7009]]
+            },
+            {
+                id: "H205", doorNo: "House #205", street: "Nehru Road", area: "Kanchipuram (South)", state: "Tamil Nadu",
+                owner: "Alok Nandan", propertyId: "PROP-TN-2026-205", deedArea: 1700, gisArea: 1920, anomalyScore: 0.54,
+                status: "Pending Check", priority: "Minor Mismatch", streetEncroach: "Car Shed Overhang", taxStatus: "Up to Date",
+                sanction: "G+2 Approved", dispute: "None", signal: "Measured footprint exceeds deed due to semi-permanent car parking canopy over front yard.",
+                coordinates: [[12.8328, 79.7000], [12.8333, 79.7000], [12.8333, 79.7009], [12.8328, 79.7009]]
+            },
+            {
+                id: "H206", doorNo: "House #206", street: "Nehru Road", area: "Kanchipuram (South)", state: "Tamil Nadu",
+                owner: "Pooja Banerjee", propertyId: "PROP-TN-2026-206", deedArea: 2100, gisArea: 2110, anomalyScore: 0.04,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "None", taxStatus: "Up to Date",
+                sanction: "G+2 Approved", dispute: "None", signal: "Clean residential title and layout verification.",
+                coordinates: [[12.8333, 79.7000], [12.8338, 79.7000], [12.8338, 79.7009], [12.8333, 79.7009]]
+            },
+            {
+                id: "H207", doorNo: "House #207", street: "Nehru Road", area: "Kanchipuram (South)", state: "Tamil Nadu",
+                owner: "Ganesh Iyer", propertyId: "PROP-TN-2026-207", deedArea: 1250, gisArea: 1255, anomalyScore: 0.06,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "None", taxStatus: "Up to Date",
+                sanction: "G+1 Approved", dispute: "None", signal: "No discrepancies observed in satellite footprint.",
+                coordinates: [[12.8338, 79.7000], [12.8343, 79.7000], [12.8343, 79.7009], [12.8338, 79.7009]]
+            },
+            {
+                id: "H208", doorNo: "House #208", street: "Nehru Road", area: "Kanchipuram (South)", state: "Tamil Nadu",
+                owner: "Sarita Saxena", propertyId: "PROP-TN-2026-208", deedArea: 1650, gisArea: 1980, anomalyScore: 0.65,
+                status: "Pending Check", priority: "Minor Mismatch", streetEncroach: "Balcony Projection Over Street", taxStatus: "Under Review",
+                sanction: "G+2 Built", dispute: "None", signal: "First-floor balcony projects +2.8 ft beyond municipal road alignment.",
+                coordinates: [[12.8343, 79.7000], [12.8348, 79.7000], [12.8348, 79.7009], [12.8343, 79.7009]]
+            },
+
+            // ================= SUBHASH BOSE AVENUE - MAHARASHTRA (HOUSES 301-308) =================
+            {
+                id: "H301", doorNo: "House #301", street: "Subhash Bose Avenue", area: "Pune (West)", state: "Maharashtra",
+                owner: "Rohan Kapoor", propertyId: "PROP-MH-2026-301", deedArea: 1800, gisArea: 1812, anomalyScore: 0.08,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "Clear Setback", taxStatus: "Up to Date",
+                sanction: "G+2 Approved", dispute: "None", signal: "Verified house footprint on Subhash Bose Avenue.",
+                coordinates: [[18.5200, 73.8500], [18.5204, 73.8500], [18.5204, 73.8508], [18.5200, 73.8508]]
+            },
+            {
+                id: "H302", doorNo: "House #302", street: "Subhash Bose Avenue", area: "Pune (West)", state: "Maharashtra",
+                owner: "Nisha Agarwal", propertyId: "PROP-MH-2026-302", deedArea: 1400, gisArea: 2150, anomalyScore: 0.92,
+                status: "Field Survey Requested", priority: "Discrepancy Flagged", streetEncroach: "Extends +6.0 ft onto street line", taxStatus: "Commercial Store Added",
+                sanction: "G+2 Commercial (Deed Res G+1)", dispute: "Notice Issued", signal: "Unsanctioned commercial ground floor extension (+53.5% area). Front shop counter constructed directly over road margin.",
+                coordinates: [[18.5204, 73.8500], [18.5209, 73.8500], [18.5209, 73.8509], [18.5204, 73.8509]]
+            },
+            {
+                id: "H303", doorNo: "House #303", street: "Subhash Bose Avenue", area: "Pune (West)", state: "Maharashtra",
+                owner: "Harish Pillai", propertyId: "PROP-MH-2026-303", deedArea: 1600, gisArea: 1608, anomalyScore: 0.05,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "None", taxStatus: "Up to Date",
+                sanction: "G+1 Approved", dispute: "None", signal: "Accurate physical land and deed alignment.",
+                coordinates: [[18.5209, 73.8500], [18.5213, 73.8500], [18.5213, 73.8508], [18.5209, 73.8508]]
+            },
+            {
+                id: "H304", doorNo: "House #304", street: "Subhash Bose Avenue", area: "Pune (West)", state: "Maharashtra",
+                owner: "Fatima Sheikh", propertyId: "PROP-MH-2026-304", deedArea: 1200, gisArea: 1580, anomalyScore: 0.81,
+                status: "Field Survey Requested", priority: "Discrepancy Flagged", streetEncroach: "Rear Drainage Alley Overlap", taxStatus: "Unrecorded Addition",
+                sanction: "G+1 Built", dispute: "Under Review", signal: "Building extended rearward by 380 sq ft into public service alley.",
+                coordinates: [[18.5213, 73.8500], [18.5218, 73.8500], [18.5218, 73.8509], [18.5213, 73.8509]]
+            },
+            {
+                id: "H305", doorNo: "House #305", street: "Subhash Bose Avenue", area: "Pune (West)", state: "Maharashtra",
+                owner: "Vinay Chawla", propertyId: "PROP-MH-2026-305", deedArea: 1500, gisArea: 1720, anomalyScore: 0.52,
+                status: "Pending Check", priority: "Minor Mismatch", streetEncroach: "Front Garden Enclosure", taxStatus: "Up to Date",
+                sanction: "G+2 Approved", dispute: "None", signal: "Front lawn boundary wall extends 2 feet onto municipal setback zone.",
+                coordinates: [[18.5218, 73.8500], [18.5223, 73.8500], [18.5223, 73.8509], [18.5218, 73.8509]]
+            },
+            {
+                id: "H306", doorNo: "House #306", street: "Subhash Bose Avenue", area: "Pune (West)", state: "Maharashtra",
+                owner: "Swati Kulkarni", propertyId: "PROP-MH-2026-306", deedArea: 1900, gisArea: 1910, anomalyScore: 0.07,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "None", taxStatus: "Up to Date",
+                sanction: "G+2 Approved", dispute: "None", signal: "Clean residential plot record.",
+                coordinates: [[18.5223, 73.8500], [18.5228, 73.8500], [18.5228, 73.8509], [18.5223, 73.8509]]
+            },
+            {
+                id: "H307", doorNo: "House #307", street: "Subhash Bose Avenue", area: "Pune (West)", state: "Maharashtra",
+                owner: "Ashok Tripathi", propertyId: "PROP-MH-2026-307", deedArea: 1350, gisArea: 1358, anomalyScore: 0.04,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "None", taxStatus: "Up to Date",
+                sanction: "G+1 Approved", dispute: "None", signal: "Building plot conforms to sanctioned plan.",
+                coordinates: [[18.5228, 73.8500], [18.5233, 73.8500], [18.5233, 73.8509], [18.5228, 73.8509]]
+            },
+            {
+                id: "H308", doorNo: "House #308", street: "Subhash Bose Avenue", area: "Pune (West)", state: "Maharashtra",
+                owner: "Divya Nambiar", propertyId: "PROP-MH-2026-308", deedArea: 1750, gisArea: 2020, anomalyScore: 0.59,
+                status: "Pending Check", priority: "Minor Mismatch", streetEncroach: "Side Garage Projection", taxStatus: "Under Review",
+                sanction: "G+2 Built", dispute: "None", signal: "Side garage extension increases measured satellite area (+15.4%).",
+                coordinates: [[18.5233, 73.8500], [18.5238, 73.8500], [18.5238, 73.8509], [18.5233, 73.8509]]
+            },
+
+            // ================= TAGORE MARG - CHHATTISGARH (HOUSES 401-408) =================
+            {
+                id: "H401", doorNo: "House #401", street: "Tagore Marg", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Manoj Mishra", propertyId: "PROP-CG-2026-401", deedArea: 1500, gisArea: 1510, anomalyScore: 0.06,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "Clear Setback", taxStatus: "Up to Date",
+                sanction: "G+1 Approved", dispute: "None", signal: "Complies with Tagore Marg road width standards.",
+                coordinates: [[21.2510, 81.6360], [21.2514, 81.6360], [21.2514, 81.6368], [21.2510, 81.6368]]
+            },
+            {
+                id: "H402", doorNo: "House #402", street: "Tagore Marg", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Bhavna Bhatt", propertyId: "PROP-CG-2026-402", deedArea: 1200, gisArea: 1790, anomalyScore: 0.86,
+                status: "Field Survey Requested", priority: "Discrepancy Flagged", streetEncroach: "Extends +4.8 ft onto main road", taxStatus: "Unrecorded Floor Built",
+                sanction: "G+3 Built (Deed G+1)", dispute: "Under Review", signal: "Footprint difference +49.1% (1,790 sq ft vs 1,200 sq ft). Unsanctioned additional floors and road margin encroachment.",
+                coordinates: [[21.2514, 81.6360], [21.2519, 81.6360], [21.2519, 81.6369], [21.2514, 81.6369]]
+            },
+            {
+                id: "H403", doorNo: "House #403", street: "Tagore Marg", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Siddharth Sen", propertyId: "PROP-CG-2026-403", deedArea: 1650, gisArea: 1658, anomalyScore: 0.05,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "None", taxStatus: "Up to Date",
+                sanction: "G+2 Approved", dispute: "None", signal: "Fully verified residential property on Tagore Marg.",
+                coordinates: [[21.2519, 81.6360], [21.2523, 81.6360], [21.2523, 81.6368], [21.2519, 81.6368]]
+            },
+            {
+                id: "H404", doorNo: "House #404", street: "Tagore Marg", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Leela Menon", propertyId: "PROP-CG-2026-404", deedArea: 1100, gisArea: 1490, anomalyScore: 0.83,
+                status: "Field Survey Requested", priority: "Discrepancy Flagged", streetEncroach: "Front Shop Extension onto Pavement", taxStatus: "Commercial Tax Unpaid",
+                sanction: "G+1 Commercial Built", dispute: "Notice Issued", signal: "Front portion converted to retail store extending onto municipal pavement.",
+                coordinates: [[21.2523, 81.6360], [21.2528, 81.6360], [21.2528, 81.6369], [21.2523, 81.6369]]
+            },
+            {
+                id: "H405", doorNo: "House #405", street: "Tagore Marg", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Pradeep Yadav", propertyId: "PROP-CG-2026-405", deedArea: 1450, gisArea: 1680, anomalyScore: 0.55,
+                status: "Pending Check", priority: "Minor Mismatch", streetEncroach: "Porch Canopy Shift", taxStatus: "Up to Date",
+                sanction: "G+1 Approved", dispute: "None", signal: "Porch structure extends slightly into front plot margin.",
+                coordinates: [[21.2528, 81.6360], [21.2533, 81.6360], [21.2533, 81.6369], [21.2528, 81.6369]]
+            },
+            {
+                id: "H406", doorNo: "House #406", street: "Tagore Marg", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Usha Ranganathan", propertyId: "PROP-CG-2026-406", deedArea: 1950, gisArea: 1960, anomalyScore: 0.08,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "None", taxStatus: "Up to Date",
+                sanction: "G+2 Approved", dispute: "None", signal: "Fully aligned deed and map survey.",
+                coordinates: [[21.2533, 81.6360], [21.2538, 81.6360], [21.2538, 81.6369], [21.2533, 81.6369]]
+            },
+            {
+                id: "H407", doorNo: "House #407", street: "Tagore Marg", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Tariq Hussain", propertyId: "PROP-CG-2026-407", deedArea: 1300, gisArea: 1308, anomalyScore: 0.05,
+                status: "Clean Record Verified", priority: "Matched", streetEncroach: "None", taxStatus: "Up to Date",
+                sanction: "G+1 Approved", dispute: "None", signal: "Verified house boundary.",
+                coordinates: [[21.2538, 81.6360], [21.2543, 81.6360], [21.2543, 81.6369], [21.2538, 81.6369]]
+            },
+            {
+                id: "H408", doorNo: "House #408", street: "Tagore Marg", area: "Raipur (Central)", state: "Chhattisgarh",
+                owner: "Kiran Mazumdar", propertyId: "PROP-CG-2026-408", deedArea: 1600, gisArea: 1880, anomalyScore: 0.60,
+                status: "Pending Check", priority: "Minor Mismatch", streetEncroach: "Terrace Canopy Overhang", taxStatus: "Under Review",
+                sanction: "G+2 Built", dispute: "None", signal: "Terrace overhang structure projects over side walkway.",
+                coordinates: [[21.2543, 81.6360], [21.2548, 81.6360], [21.2548, 81.6369], [21.2543, 81.6369]]
+            }
+        ];
+
+        let map, mapLayers = {}, activeHouseId = "H102";
+
+        function initMap() {
+            if (map) return;
+
+            map = L.map('map', { maxZoom: 19 }).setView([21.2528, 81.6335], 16);
+
+            // 1. Esri World Satellite View (High-Res Imagery)
+            const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                maxNativeZoom: 18,
+                attribution: 'Tiles &copy; Esri, Maxar'
+            }).addTo(map);
+
+            // 2. Esri World Street Map
+            const esriStreet = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                maxNativeZoom: 17,
+                attribution: 'Tiles &copy; Esri'
+            });
+
+            // 3. Esri World Topo Map (Topographic View)
+            const esriTopo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                maxNativeZoom: 17,
+                attribution: 'Tiles &copy; Esri'
+            });
+
+            L.control.layers({
+                "Satellite View": esriSatellite,
+                "Street View (Esri)": esriStreet,
+                "Topo Map View": esriTopo
+            }).addTo(map);
+
+            streetHouses.forEach(h => {
+                let color = "#10b981";
+                if (h.priority === "Discrepancy Flagged") color = "#f43f5e";
+                else if (h.priority === "Minor Mismatch") color = "#f59e0b";
+
+                const polygon = L.polygon(h.coordinates, {
+                    color: color,
+                    fillColor: color,
+                    fillOpacity: 0.40,
+                    weight: 2
+                });
+
+                polygon.bindPopup(`
+                    <div style="font-family: 'Inter', sans-serif; font-size: 12px; padding: 2px;">
+                        <strong style="color:#38bdf8;">${h.owner}</strong> (${h.doorNo})<br>
+                        <span style="color:#cbd5e1;">${h.street}, ${h.area} (${h.state})</span><br>
+                        <b>Deed Area:</b> ${h.deedArea.toLocaleString()} sq ft<br>
+                        <b>Satellite Area:</b> ${h.gisArea.toLocaleString()} sq ft<br>
+                        <b>Status:</b> <span style="color:${color}; font-weight:bold;">${h.priority}</span>
+                    </div>
+                `);
+
+                polygon.on('click', () => selectHouse(h.id));
+                mapLayers[h.id] = polygon;
+            });
+
+            applyFilters();
+            selectHouse("H102");
+        }
+
+        function clearSearch() {
+            document.getElementById('house-search-input').value = '';
+            applyFilters();
+        }
+
+        function getFilteredHouses() {
+            const stateVal = document.getElementById('state-filter').value;
+            const areaVal = document.getElementById('area-filter').value;
+            const streetVal = document.getElementById('street-filter').value;
+            const searchVal = document.getElementById('house-search-input').value.toLowerCase().trim();
+
+            const clearBtn = document.getElementById('clear-search-btn');
+            if (searchVal.length > 0) clearBtn.classList.remove('hidden');
+            else clearBtn.classList.add('hidden');
+
+            return streetHouses.filter(h => {
+                const matchState = (stateVal === "ALL" || h.state === stateVal);
+                const matchArea = (areaVal === "ALL" || h.area === areaVal);
+                const matchStreet = (streetVal === "ALL" || h.street === streetVal);
+                
+                const matchSearch = !searchVal || (
+                    h.owner.toLowerCase().includes(searchVal) ||
+                    h.doorNo.toLowerCase().replace('#', '').includes(searchVal.replace('#', '')) ||
+                    h.id.toLowerCase().includes(searchVal) ||
+                    h.propertyId.toLowerCase().includes(searchVal) ||
+                    h.street.toLowerCase().includes(searchVal) ||
+                    h.area.toLowerCase().includes(searchVal) ||
+                    h.state.toLowerCase().includes(searchVal)
+                );
+
+                return matchState && matchArea && matchStreet && matchSearch;
+            });
+        }
+
+        function applyFilters() {
+            const filtered = getFilteredHouses();
+            renderHousesList(filtered);
+            updateStats(filtered);
+
+            const filteredIds = new Set(filtered.map(h => h.id));
+            
+            // Show ONLY matching house polygons and remove non-matching ones
+            streetHouses.forEach(h => {
+                const poly = mapLayers[h.id];
+                if (filteredIds.has(h.id)) {
+                    if (!map.hasLayer(poly)) poly.addTo(map);
+                } else {
+                    if (map.hasLayer(poly)) map.removeLayer(poly);
+                }
+            });
+
+            const searchVal = document.getElementById('house-search-input').value.trim();
+            const streetVal = document.getElementById('street-filter').value;
+            
+            let tagText = `${filtered.length} Houses Visible`;
+            if (searchVal) tagText = `${filtered.length} House(s) Found ("${searchVal}")`;
+            else if (streetVal !== "ALL") tagText = `${filtered.length} Houses on ${streetVal}`;
+            
+            document.getElementById('location-active-tag').innerText = tagText;
+
+            // Zoom & auto-selection handling
+            if (filtered.length === 1) {
+                selectHouse(filtered[0].id);
+            } else if (filtered.length > 0) {
+                const bounds = L.latLngBounds(filtered.flatMap(h => h.coordinates));
+                map.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 });
+            }
+        }
+
+        function renderHousesList(filtered) {
+            const container = document.getElementById('all-houses-list');
+            container.innerHTML = '';
+
+            document.getElementById('houses-count-label').innerText = `Showing ${filtered.length} Houses`;
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="bg-slate-900 border border-slate-700/60 p-4 rounded-lg text-center text-xs text-slate-400">
+                    <i class="fa-solid fa-magnifying-glass-slash text-lg mb-1 text-slate-500 block"></i>
+                    No matching house found. Try searching by Owner Name, Door No, or clear the search filter.
+                </div>`;
+                return;
+            }
+
+            filtered.forEach(h => {
+                const isSelected = activeHouseId === h.id ? "border-sky-500 bg-slate-800" : "border-slate-700/60 bg-slate-900/60 hover:bg-slate-800/80";
+                let badgeColor = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+                if (h.priority === "Discrepancy Flagged") badgeColor = "bg-rose-500/10 text-rose-400 border-rose-500/20";
+                else if (h.priority === "Minor Mismatch") badgeColor = "bg-amber-500/10 text-amber-400 border-amber-500/20";
+
+                const item = document.createElement('div');
+                item.className = `p-2.5 border rounded-lg cursor-pointer transition flex justify-between items-center ${isSelected}`;
+                item.onclick = () => selectHouse(h.id);
+
+                item.innerHTML = `
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="font-extrabold text-xs text-white">${h.owner}</span>
+                            <span class="text-[10px] text-slate-400">(${h.doorNo})</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-0.5">${h.street}, ${h.area} | Deed: ${h.deedArea.toLocaleString()} sq ft | Sat: ${h.gisArea.toLocaleString()} sq ft</p>
+                    </div>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded border ${badgeColor}">${h.priority}</span>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function updateStats(filtered) {
+            const highPri = filtered.filter(h => h.priority === "Discrepancy Flagged").length;
+            const verified = filtered.filter(h => h.status.includes("Verified")).length;
+            const anomalies = filtered.filter(h => h.anomalyScore > 0.40).length;
+
+            document.getElementById('stat-total').innerText = `${filtered.length} Houses`;
+            document.getElementById('stat-high-priority').innerText = `${highPri} Houses`;
+            document.getElementById('stat-verified').innerText = `${verified} Houses`;
+            document.getElementById('stat-anomalies').innerText = `${anomalies} Houses`;
+
+            document.getElementById('stat-street-subtext').innerHTML = `<i class="fa-solid fa-location-dot text-sky-400 mr-1"></i> Active Filtered View`;
+        }
+
+        function selectHouse(id) {
+            activeHouseId = id;
+            const h = streetHouses.find(item => item.id === id);
+            if (!h) return;
+
+            renderHousesList(getFilteredHouses());
+
+            if (mapLayers[id]) {
+                if (!map.hasLayer(mapLayers[id])) {
+                    mapLayers[id].addTo(map);
+                }
+                map.fitBounds(mapLayers[id].getBounds(), { padding: [60, 60], maxZoom: 18 });
+                mapLayers[id].openPopup();
+            }
+
+            document.getElementById('active-house-badge').innerText = `${h.doorNo} Selected`;
+            document.getElementById('house-owner-name').innerText = h.owner;
+            document.getElementById('house-door-no').innerHTML = `<i class="fa-solid fa-location-dot text-rose-400 mr-1"></i> ${h.doorNo}, ${h.street}`;
+            document.getElementById('house-loc-tag').innerText = `${h.area}, ${h.state}`;
+
+            document.getElementById('house-deed-area').innerText = `${h.deedArea.toLocaleString()} Sq Ft`;
+            document.getElementById('house-gis-area').innerText = `${h.gisArea.toLocaleString()} Sq Ft`;
+
+            const diff = h.gisArea - h.deedArea;
+            const diffPct = ((diff / h.deedArea) * 100).toFixed(1);
+            const diffEl = document.getElementById('house-diff-area');
+
+            if (diff > 50) {
+                diffEl.innerText = `+${diff.toLocaleString()} Sq Ft (+${diffPct}%)`;
+                diffEl.className = "font-extrabold text-rose-400 font-mono";
+            } else if (diff < -20) {
+                diffEl.innerText = `${diff.toLocaleString()} Sq Ft (${diffPct}%)`;
+                diffEl.className = "font-extrabold text-amber-400 font-mono";
+            } else {
+                diffEl.innerText = `+${diff} Sq Ft (+${diffPct}%)`;
+                diffEl.className = "font-extrabold text-emerald-400 font-mono";
+            }
+
+            document.getElementById('house-street-encroach').innerText = h.streetEncroach;
+            document.getElementById('house-tax-status').innerText = h.taxStatus;
+            document.getElementById('house-sanction').innerText = h.sanction;
+            document.getElementById('house-dispute').innerText = h.status;
+            document.getElementById('house-ml-signal').innerText = h.signal;
+
+            const badgeBox = document.getElementById('house-risk-badge-box');
+            if (h.priority === "Discrepancy Flagged") {
+                badgeBox.innerHTML = `
+                    <span class="px-3 py-1 rounded-full text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/30 inline-block">DISCREPANCY FLAGGED</span>
+                    <p class="text-[10px] text-slate-400 mt-1">Mismatch Level: <strong class="text-rose-400">${(h.anomalyScore * 100).toFixed(0)}% Alert</strong></p>
+                `;
+            } else if (h.priority === "Minor Mismatch") {
+                badgeBox.innerHTML = `
+                    <span class="px-3 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 inline-block">MINOR MISMATCH</span>
+                    <p class="text-[10px] text-slate-400 mt-1">Mismatch Level: <strong class="text-amber-400">${(h.anomalyScore * 100).toFixed(0)}% Alert</strong></p>
+                `;
+            } else {
+                badgeBox.innerHTML = `
+                    <span class="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 inline-block">MATCHED RECORD</span>
+                    <p class="text-[10px] text-slate-400 mt-1">Mismatch Level: <strong class="text-emerald-400">${(h.anomalyScore * 100).toFixed(0)}% Clear</strong></p>
+                `;
+            }
+        }
+
+        function updateHouseStatus(newStatus) {
+            const h = streetHouses.find(item => item.id === activeHouseId);
+            if (h) {
+                h.status = newStatus;
+                if (newStatus.includes("Verified")) {
+                    p.priority = "Matched";
+                    p.anomalyScore = 0.05;
+                }
+                selectHouse(activeHouseId);
+            }
+        }
+
+        function toggleCitizenModal() {
+            const modal = document.getElementById('citizen-modal');
+            modal.classList.toggle('hidden');
+        }
+
+        function handleCitizenSubmit(e) {
+            e.preventDefault();
+            const ownerInput = document.getElementById('cit-owner').value;
+            const houseNoInput = document.getElementById('cit-house-no').value;
+
+            const randomCase = Math.floor(1000 + Math.random() * 9000);
+            document.getElementById('cit-case-id').innerText = `CASE-2026-${randomCase}`;
+            document.getElementById('citizen-form').classList.add('hidden');
+            document.getElementById('cit-success').classList.remove('hidden');
+
+            const match = streetHouses.find(h => 
+                h.owner.toLowerCase().includes(ownerInput.toLowerCase()) || 
+                h.doorNo.toLowerCase().includes(houseNoInput.toLowerCase())
+            );
+
+            if (match) {
+                match.priority = "Discrepancy Flagged";
+                match.status = "Citizen Discrepancy Filed";
+                match.anomalyScore = 0.95;
+                match.signal = `Discrepancy reported by homeowner (${ownerInput}). Requires physical setback survey.`;
+            }
+
+            setTimeout(() => {
+                toggleCitizenModal();
+                document.getElementById('citizen-form').reset();
+                document.getElementById('citizen-form').classList.remove('hidden');
+                document.getElementById('cit-success').classList.add('hidden');
+                applyFilters();
+                if (match) selectHouse(match.id);
+            }, 2500);
+        }
+
+        function safeInitMap() {
+            if (window.mapInitialized) return;
+            window.mapInitialized = true;
+            initMap();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', safeInitMap);
+        } else {
+            safeInitMap();
+        }
+    </script>
+</body>
+</html>
